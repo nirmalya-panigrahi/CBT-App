@@ -1,0 +1,78 @@
+name: Build and Release
+
+on:
+  push:
+    tags: ['v*']        # e.g. v1.0.0
+  workflow_dispatch:    # manual run builds only, no release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows
+          - os: macos-latest
+            label: macos
+          - os: ubuntu-latest
+            label: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Tk (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - run: pip install -r requirements.txt
+      - run: python build_app.py
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Compress-Archive -Path dist/MindSyncCBT.exe -DestinationPath MindSyncCBT-windows.zip
+
+      - name: Package (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd dist
+          if [ -d MindSyncCBT.app ]; then
+            zip -r ../MindSyncCBT-macos.zip MindSyncCBT.app
+          else
+            zip ../MindSyncCBT-macos.zip MindSyncCBT
+          fi
+
+      - name: Package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x dist/MindSyncCBT
+          tar -czf MindSyncCBT-linux.tar.gz -C dist MindSyncCBT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MindSyncCBT-${{ matrix.label }}
+          path: |
+            MindSyncCBT-*.zip
+            MindSyncCBT-*.tar.gz
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          generate_release_notes: true
