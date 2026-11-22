@@ -3,6 +3,18 @@
 import json
 import os
 import datetime
+import sys
+
+def get_user_data_dir(app_name="MindSyncCBT"):
+    """Per-user writable data folder, so data survives packaging and updates."""
+    if sys.platform.startswith("win"):
+        root = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif sys.platform == "darwin":
+        root = os.path.expanduser("~/Library/Application Support")
+    else:
+        root = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+    return os.path.join(root, app_name)
+
 
 class DataManager:
     """
@@ -11,7 +23,9 @@ class DataManager:
     Ensures data consistency and handles file operations.
     Each record will have a 'creation_timestamp' for unique identification, especially for editing/deleting.
     """
-    def __init__(self, base_dir="data"): # Use base_dir argument for flexibility
+    def __init__(self, base_dir=None): # Use base_dir argument for flexibility
+        if base_dir is None:
+            base_dir = get_user_data_dir()
         self.base_dir = base_dir
         os.makedirs(self.base_dir, exist_ok=True)
 
